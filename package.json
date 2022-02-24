@@ -12,6 +12,7 @@
   "scripts": {
     "serve": "vue-cli-service serve",
     "build": "vue-cli-service build",
+    "rebuild": ".\\node_modules\\.bin\\electron-rebuild.cmd -$(electron -v)",
     "lint": "vue-cli-service lint",
     "electron:build": "vue-cli-service electron:build",
     "electron:serve": "vue-cli-service electron:serve",
@@ -24,6 +25,7 @@
     "axios": "^0.25.0",
     "core-js": "^3.6.5",
     "save": "^2.4.0",
+    "serialport": "^10.3.0",
     "set-interval-async": "^2.0.3",
     "vue": "^2.6.11",
     "vue-axios": "^3.4.1",
@@ -37,6 +39,7 @@
     "babel-eslint": "^10.1.0",
     "electron": "^13.6.9",
     "electron-devtools-installer": "^3.1.0",
+    "electron-rebuild": "^3.2.7",
     "eslint": "^6.7.2",
     "eslint-plugin-vue": "^6.2.2",
     "sass": "~1.32.0",

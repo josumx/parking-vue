@@ -19,6 +19,16 @@ const apiServer = axios.create({
     }
 
 })
+const apiServer2 = axios.create({
+    baseURL: 'http://192.168.192.125',
+    withCredentials: false,
+    timeout: 1000,
+    headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json'
+    }
+
+})
 
 export default {
 
@@ -36,5 +46,9 @@ export default {
     },
     getBoleto() {
         return apiServer.get('/api/public/boletos');
+    },
+    getTarifa(boleto) {
+        return apiServer2.get('/?f=getTarifaBoleto&boleto=' + boleto);
     }
+
 }
