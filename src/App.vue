@@ -1,25 +1,7 @@
 <template>
   <v-app>
     <v-app-bar app color="primary" dark>
-      <div class="d-flex align-center">
-        <v-img
-          alt="Vuetify Logo"
-          class="shrink mr-2"
-          contain
-          src="assets/strommda.jpg"
-          transition="scale-transition"
-          width="40"
-        />
-
-        <v-img
-          alt="Vuetify Name"
-          class="shrink mt-1 hidden-sm-and-down"
-          contain
-          min-width="100"
-          src="https://cdn.vuetifyjs.com/images/logos/vuetify-name-dark.png"
-          width="100"
-        />
-      </div>
+      <div class="d-flex align-center"></div>
 
       <v-spacer></v-spacer>
 
@@ -34,19 +16,19 @@
     </v-app-bar>
 
     <v-main>
-      <entrada />
+      <pago />
     </v-main>
   </v-app>
 </template>
 
 <script>
-import entrada from "./components/entrada";
+import pago from "./components/pago";
 
 export default {
   name: "App",
 
   components: {
-    entrada,
+    pago,
   },
 
   data: () => ({
