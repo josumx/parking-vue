@@ -49,6 +49,9 @@ export default {
     },
     getTarifa(boleto) {
         return apiServer2.get('/?f=getTarifaBoleto&boleto=' + boleto);
+    },
+    getTarifaQR(boleto) {
+        return apiServer2.get('/?f=getTarifa&qr=' + boleto);
     }
 
 }

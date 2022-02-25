@@ -1,7 +1,7 @@
 <template>
   <v-dialog v-model="show" max-width="500px" persistent>
     <v-card>
-      <v-toolbar color="primary" dark>{{ mensaje }}</v-toolbar>
+      <v-toolbar color="primary" dark>Validacion</v-toolbar>
       <v-card-text>
         <div class="text-h2 pa-12">{{ mensaje }}</div>
       </v-card-text>
@@ -15,6 +15,7 @@
           >Cancelar</v-btn
         >
         <v-btn
+          v-if="(state = 'nopagado')"
           color="success"
           @click.stop="
             $parent.payoptions();
@@ -29,9 +30,9 @@
 
 <script>
 export default {
-  props: ["visible", "mensaje", "persistent", "pago"],
+  props: ["visible", "mensaje", "persistent", "pago", "estatus"],
   data: () => ({
-    estatus: "demo",
+    state: "",
   }),
   computed: {
     show: {
@@ -43,6 +44,12 @@ export default {
           this.$emit("close");
         }
       },
+    },
+  },
+  watch: {
+    estatus: function (val) {
+      console.log(val);
+      this.state = val;
     },
   },
 };

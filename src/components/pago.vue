@@ -37,8 +37,10 @@
                 v-on:click="keypad(boton.value)"
                 :color="boton.color"
               >
+                <br />
                 <v-icon v-if="boton.icon" dark>{{ boton.icon }}</v-icon>
                 <template v-else>{{ boton.label }}</template>
+                <br />
               </v-btn>
             </v-flex>
             <v-flex xs4>
@@ -72,10 +74,16 @@
         </v-container>
       </v-card-text>
     </v-row>
+    <br />
+    <v-alert dense type="info"> {{ estatusport }}</v-alert>
+    <v-alert dense type="info"> {{ estatus }}</v-alert>
+    <v-alert dense type="info"> {{ mensaje }}</v-alert>
+
     <tarifa
       :visible="showtarifa"
       @close="showtarifa = false"
-      :mensaje="estatus"
+      :mensaje="mensaje"
+      :estatus="estatus"
     />
     <opciones
       :visible="showopciones"
@@ -98,10 +106,17 @@ export default {
   data: () => ({
     boleto: "",
     estatus: "",
+    mensaje: "",
     showtarifa: false,
     showopciones: false,
+    estatusport: "Espere...",
     port: new SerialPort({
-      path: "COM14",
+      path: "COM20",
+      baudRate: 9600,
+      autoOpen: false,
+    }),
+    escaner: new SerialPort({
+      path: "COM21",
       baudRate: 9600,
       autoOpen: false,
     }),
@@ -128,12 +143,15 @@ export default {
     this.boleto = "A142F199E";
     this.showtarifa = false;
     this.showopciones = false;
+    this.escaner.open();
 
     this.port.on("data", (data) => {
-      console.log(data);
+      console.log(data.toString("ascii"));
+    });
+    this.escaner.on("data", (data) => {
+      console.log(data.toString("ascii"));
       this.validatarifaescaner(data.toString("ascii"));
     });
-
     const connect = () => {
       console.log("connecting");
       this.port.open((error) => {
@@ -142,10 +160,14 @@ export default {
           connect();
         } else {
           console.log("connecting ok");
+          this.estatusport = "Port connected";
+          this.port.write(Buffer.from([0x11, 0x00, 0x01, 0x00, 0x00, 0x00]));
+          this.port.write(Buffer.from([0x11, 0x01, 0xff, 0xff, 0x00, 0x00]));
         }
       });
     };
     this.port.on("close", () => {
+      this.estatusport = "Port disconnected";
       connect();
     });
     connect();
@@ -169,8 +191,22 @@ export default {
       this.showtarifa = true;
     },
     validatarifaescaner: async function (string) {
-      const response = await EventService.getTarifa(string);
+      const response = await EventService.getTarifaQR(string);
       this.estatus = response.data.estatus;
+      let msg;
+      switch (this.estatus) {
+        case "nopagado":
+          msg = "Boleto :" + response.cadena;
+          msg = msg + "Tarifa :" + response.tarifa;
+          break;
+        case "pagado":
+          msg = "Boleto ya pagado";
+          break;
+        case "invalido":
+          msg = "Boleto inexistente";
+          break;
+      }
+      this.mensaje = msg;
       console.log(tarifa);
       this.showtarifa = true;
     },
@@ -178,35 +214,36 @@ export default {
       this.activarPago();
       this.showopciones = true;
     },
-    activarPago: async function () {
+    desactivarPago: function () {
+      this.port.write(Buffer.from([0x14, 0x00]));
+    },
+    activarPago: function () {
       this.port.write(Buffer.from([0x14, 0x01]));
-      this.port.write(Buffer.from([0x14, 0x01]));
-      this.port.write(Buffer.from([0x14, 0x01]));
-      try {
-        await new Promise((resolve, reject) => {
-          let done = false;
-          const cb = (data) => {
-            if (data.toString("ascii") == "0") {
-              resolve();
-            } else {
-              reject();
-            }
-            this.port.off("data", cb);
-            done = true;
-          };
-          this.port.on("data", cb);
-          setTimeout(() => {
-            console.log("timeout");
-            if (!done) {
-              reject();
-              this.port.off("data", cb);
-            }
-          }, 1000);
-        });
-        console.log("Ok");
-      } catch (error) {
-        console.log("Error", error);
-      }
+      // try {
+      //   await new Promise((resolve, reject) => {
+      //     let done = false;
+      //     const cb = (data) => {
+      //       if (data == "0") {
+      //         resolve();
+      //       } else {
+      //         reject();
+      //       }
+      //       this.port.off("data", cb);
+      //       done = true;
+      //     };
+      //     this.port.on("data", cb);
+      //     setTimeout(() => {
+      //       console.log("timeout");
+      //       if (!done) {
+      //         reject();
+      //         this.port.off("data", cb);
+      //       }
+      //     }, 1000);
+      //   });
+      //   console.log("Ok");
+      // } catch (error) {
+      //   console.log("Error", error);
+      // }
     },
   },
   components: {
@@ -216,8 +253,8 @@ export default {
 };
 /*
 
-=> 110001000000  --  setup
-=> 1101FFFF0000  --  setup max min
+=> 0x11 0x00 0x01 0x00 0x00 0x00   --  setup
+=> 0x11 0x01 0xFF 0xFF 0x00 0x00   --  setup max min
 
 
 => 1401 enable  ACK  00
@@ -226,6 +263,14 @@ Esperar evento <=  1003fde9
 => 13020001 producto despachadoDESPACHADO  ack => 00 
 => 1304  Mensaje de finalizacion de transaccion ACK  00 10 07 
 => 1400 DISABLE
+
+==== RESPUESTAS  === 
+10 04 == CANCELACION DE OPERACION DESPUES DE ELEGIR PRODUCTO
+10 03 FD E9 == ELIGA UN PRODUCTO  HAY QUE RESPONDER CON EL TOTAL 
+
+
+
+
 */
 </script>
 

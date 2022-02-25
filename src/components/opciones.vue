@@ -1,14 +1,13 @@
 <template>
   <v-dialog v-model="show" max-width="500px">
-    <v-alert type="info">Seleccione una forma de pago</v-alert>
+    <v-alert type="info">Pago</v-alert>
     <v-card>
-      <v-btn size="x-large"> Tarjeta de Credito/Debito </v-btn>
-      <v-btn disabled size="x-large"> CODI </v-btn>
-      <v-btn disabled size="x-large"> Mercadopago </v-btn>
+      Pago en proceso siga las instrucciones de la terminal Nayax
       <v-card-actions>
         <v-btn
           color="error"
           @click.stop="
+            $parent.desactivarPago();
             $parent.clear();
             show = false;
           "

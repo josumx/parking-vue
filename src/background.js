@@ -4,7 +4,6 @@ import { app, protocol, BrowserWindow } from 'electron'
 import { createProtocol } from 'vue-cli-plugin-electron-builder/lib'
 import installExtension, { VUEJS_DEVTOOLS } from 'electron-devtools-installer'
 const isDevelopment = process.env.NODE_ENV !== 'production'
-const electron = require('electron');
 
 // Scheme must be registered before the app is ready
 protocol.registerSchemesAsPrivileged([
@@ -13,15 +12,11 @@ protocol.registerSchemesAsPrivileged([
 
 async function createWindow() {
   // Create the browser window.
-  const { width, height } = electron.screen.getPrimaryDisplay().size
 
   const win = new BrowserWindow({
-    width: 800,
-    height: 800,
-    // x: 0, y: 0,
-    // alwaysOnTop: true,
-    // frame: false,
-    // resizable: false,
+    width: 900,
+    height: 1000,
+
     // kiosk: true,
     webPreferences: {
 
