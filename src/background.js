@@ -4,6 +4,7 @@ import { app, protocol, BrowserWindow } from 'electron'
 import { createProtocol } from 'vue-cli-plugin-electron-builder/lib'
 import installExtension, { VUEJS_DEVTOOLS } from 'electron-devtools-installer'
 const isDevelopment = process.env.NODE_ENV !== 'production'
+const electron = require('electron');
 
 // Scheme must be registered before the app is ready
 protocol.registerSchemesAsPrivileged([
@@ -12,14 +13,22 @@ protocol.registerSchemesAsPrivileged([
 
 async function createWindow() {
   // Create the browser window.
+  const { width, height } = electron.screen.getPrimaryDisplay().size
+
   const win = new BrowserWindow({
     width: 800,
-    height: 600,
+    height: 800,
+    // x: 0, y: 0,
+    // alwaysOnTop: true,
+    // frame: false,
+    // resizable: false,
+    // kiosk: true,
     webPreferences: {
 
       // Use pluginOptions.nodeIntegration, leave this alone
       // See nklayman.github.io/vue-cli-plugin-electron-builder/guide/security.html#node-integration for more info
       nodeIntegration: true,
+      contextIsolation: false,
       // nodeIntegration: process.env.ELECTRON_NODE_INTEGRATION,
       // contextIsolation: !process.env.ELECTRON_NODE_INTEGRATION
     }
@@ -32,6 +41,7 @@ async function createWindow() {
     if (!process.env.IS_TEST) win.webContents.openDevTools()
   } else {
     createProtocol('app')
+    app.allowRendererProcessReuse = false;
     // Load the index.html when not in development
     win.loadURL('app://./index.html')
   }
@@ -45,7 +55,6 @@ app.on('window-all-closed', () => {
     app.quit()
   }
 })
-app.allowRendererProcessReuse = false;
 
 app.on('activate', () => {
   // On macOS it's common to re-create a window in the app when the

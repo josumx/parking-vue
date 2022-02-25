@@ -85,41 +85,13 @@
   </v-container>
 </template>
 
+
 <script>
 import EventService from "@/services/ApiService.js";
 import tarifa from "./tarifa.vue";
 import opciones from "./opciones.vue";
-
-// const { par  se } = require("path").default;
-// import serialPort from "@/serialport";
-const serialPort = require("serialport");
-
-const port = new serialPort("COM12", { baudRate: 9600 });
-
-const parser = new serialPort.parsers.Readline();
-
-port.pipe(parser);
-
-parser.on("data", (line) => {
-  console.log("Arduino dice: " + line);
-  port.write("Era una vez ");
-});
-
-// import SerialPort from "serialport";
-// const SerialPort = require("serialport");
-
-// const Readline = SerialPort.parsers.Readline;
-// const port = new SerialPort("COM12", {
-//   baudRate: 9600,
-// });
-// console.log(port);
-// const parser = new Readline();
-// port.pipe(parser);
-
-// //Read Data
-// parser.on("data", (line) => {
-//   console.log(line);
-// });
+import { SerialPort } from "serialport";
+// const serialPort = require("serialport");
 
 export default {
   name: "pago",
@@ -128,6 +100,11 @@ export default {
     estatus: "",
     showtarifa: false,
     showopciones: false,
+    port: new SerialPort({
+      path: "COM14",
+      baudRate: 9600,
+      autoOpen: false,
+    }),
     botones: [
       { label: "1", value: "1", color: "normal" },
       { label: "2", value: "2", color: "normal" },
@@ -151,6 +128,27 @@ export default {
     this.boleto = "A142F199E";
     this.showtarifa = false;
     this.showopciones = false;
+
+    this.port.on("data", (data) => {
+      console.log(data);
+      this.validatarifaescaner(data.toString("ascii"));
+    });
+
+    const connect = () => {
+      console.log("connecting");
+      this.port.open((error) => {
+        if (error) {
+          console.log("connecting error");
+          connect();
+        } else {
+          console.log("connecting ok");
+        }
+      });
+    };
+    this.port.on("close", () => {
+      connect();
+    });
+    connect();
   },
   methods: {
     readSerial: function () {},
@@ -170,8 +168,45 @@ export default {
       console.log(tarifa);
       this.showtarifa = true;
     },
+    validatarifaescaner: async function (string) {
+      const response = await EventService.getTarifa(string);
+      this.estatus = response.data.estatus;
+      console.log(tarifa);
+      this.showtarifa = true;
+    },
     payoptions: async function () {
+      this.activarPago();
       this.showopciones = true;
+    },
+    activarPago: async function () {
+      this.port.write(Buffer.from([0x14, 0x01]));
+      this.port.write(Buffer.from([0x14, 0x01]));
+      this.port.write(Buffer.from([0x14, 0x01]));
+      try {
+        await new Promise((resolve, reject) => {
+          let done = false;
+          const cb = (data) => {
+            if (data.toString("ascii") == "0") {
+              resolve();
+            } else {
+              reject();
+            }
+            this.port.off("data", cb);
+            done = true;
+          };
+          this.port.on("data", cb);
+          setTimeout(() => {
+            console.log("timeout");
+            if (!done) {
+              reject();
+              this.port.off("data", cb);
+            }
+          }, 1000);
+        });
+        console.log("Ok");
+      } catch (error) {
+        console.log("Error", error);
+      }
     },
   },
   components: {
@@ -179,6 +214,18 @@ export default {
     opciones,
   },
 };
-</script>
+/*
 
+=> 110001000000  --  setup
+=> 1101FFFF0000  --  setup max min
+
+
+=> 1401 enable  ACK  00
+Esperar evento <=  1003fde9
+=> 1301F40001  -- SETEO COBRO ACK 100503
+=> 13020001 producto despachadoDESPACHADO  ack => 00 
+=> 1304  Mensaje de finalizacion de transaccion ACK  00 10 07 
+=> 1400 DISABLE
+*/
+</script>
 
