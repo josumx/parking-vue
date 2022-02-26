@@ -75,7 +75,12 @@
       </v-card-text>
     </v-row>
     <br />
-    <v-alert dense type="info"> {{ estatusport }}</v-alert>
+    <v-alert v-show="!estatusport" dense type="error">
+      Nayax disconnected</v-alert
+    >
+    <v-alert v-show="estatusport" dense type="success">
+      Nayax connected</v-alert
+    >
     <v-alert dense type="info"> {{ estatus }}</v-alert>
     <v-alert dense type="info"> {{ mensaje }}</v-alert>
 
@@ -93,12 +98,20 @@
   </v-container>
 </template>
 
-
+<style>
+.v-btn {
+  width: 36px;
+  min-width: 36px;
+}
+</style>
 <script>
 import EventService from "@/services/ApiService.js";
+import escanerservice from "@/services/escaner.js";
 import tarifa from "./tarifa.vue";
-import opciones from "./opciones.vue";
+import opciones from "./proceso.vue";
 import { SerialPort } from "serialport";
+const { ReadlineParser } = require("@serialport/parser-readline");
+
 // const serialPort = require("serialport");
 
 export default {
@@ -106,17 +119,13 @@ export default {
   data: () => ({
     boleto: "",
     estatus: "",
+    estatus_pago: "inactivo",
     mensaje: "",
     showtarifa: false,
     showopciones: false,
-    estatusport: "Espere...",
+    estatusport: false,
     port: new SerialPort({
-      path: "COM20",
-      baudRate: 9600,
-      autoOpen: false,
-    }),
-    escaner: new SerialPort({
-      path: "COM21",
+      path: "COM1",
       baudRate: 9600,
       autoOpen: false,
     }),
@@ -143,36 +152,119 @@ export default {
     this.boleto = "A142F199E";
     this.showtarifa = false;
     this.showopciones = false;
-    this.escaner.open();
+    escanerservice.connect();
 
-    this.port.on("data", (data) => {
-      console.log(data.toString("ascii"));
+    // this.port.on("data", (data) => {
+    //   console.log(data.toString("ascii"));
+    // });
+    const parser = this.port.pipe(new ReadlineParser({ delimiter: "\r\n" }));
+    parser.on("data", (data) => {
+      this.process(data.trim());
     });
-    this.escaner.on("data", (data) => {
-      console.log(data.toString("ascii"));
-      this.validatarifaescaner(data.toString("ascii"));
-    });
+
     const connect = () => {
       console.log("connecting");
-      this.port.open((error) => {
+      this.port.open(async (error) => {
         if (error) {
           console.log("connecting error");
-          connect();
+          console.log(error);
+          setTimeout(() => connect(), "3000");
         } else {
           console.log("connecting ok");
-          this.estatusport = "Port connected";
-          this.port.write(Buffer.from([0x11, 0x00, 0x01, 0x00, 0x00, 0x00]));
-          this.port.write(Buffer.from([0x11, 0x01, 0xff, 0xff, 0x00, 0x00]));
+
+          this.estatusport = true;
         }
       });
     };
     this.port.on("close", () => {
-      this.estatusport = "Port disconnected";
+      this.estatusport = false;
       connect();
     });
     connect();
   },
   methods: {
+    enviar: async function (comando) {
+      console.log("Enviamos", comando);
+      await this.sleep(500);
+      this.port.write(
+        Buffer.from(comando.split(" ").map((hex) => parseInt(hex, 16)))
+      );
+    },
+    process: async function (data) {
+      // validar estado.
+      console.log("Recibimos", data);
+      switch (this.estatus_pago) {
+        case "inactivo":
+          break;
+        case "activando":
+          if (data == "00") {
+            this.estatus_pago = "esperando_tarjeta";
+            console.log(this.estatus_pago);
+          }
+
+          break;
+        case "esperando_tarjeta":
+          // en espera de que pasen tarjeta
+          if (data == "10 03 FD E9") {
+            // calcular tarifa
+            let importe = 1.21;
+            let centavos = importe * 100;
+            const b3 = (centavos & 0x0000ff).toString(16);
+            const b2 = ((centavos >> 8) & 0x0000ff).toString(16);
+            const b1 = ((centavos >> 16) & 0x0000ff).toString(16);
+            await this.enviar(`13 ${b1} ${b2} ${b3} 00 01`);
+            this.estatus_pago = "esperando_cobro";
+            console.log(this.estatus_pago);
+          }
+          break;
+        case "esperando_cobro":
+          // if (data == "10 05 00 14") {
+          if (data.startsWith("10 05")) {
+            await this.sleep(3000);
+            // maquina muestra retir tarjeta
+            await this.enviar("13 02 00 01");
+            this.estatus_pago = "confirmando_despacho";
+            console.log(this.estatus_pago);
+          }
+          break;
+        case "confirmando_despacho":
+          if (data == "00") {
+            await this.sleep(3000);
+            // maquina dice gracias
+            await this.enviar("13 04");
+            // this.port.write(Buffer.from([0x13, 0x04]));
+            this.estatus_pago = "terminando";
+            console.log(this.estatus_pago);
+            return "";
+          } else if (data == "FF") {
+            await this.enviar("13 02 00 01");
+            // await this.enviar("13 04");
+            // await this.enviar("14 00");
+            // this.estatus_pago = "desactivando";
+            // console.log(this.estatus_pago);
+          }
+          break;
+        case "terminando":
+          if (data == "10 07") {
+            await this.enviar("14 00");
+            // this.port.write(Buffer.from([0x14, 0x00]));
+            this.estatus_pago = "desactivando";
+            console.log(this.estatus_pago);
+          }
+          break;
+        case "desactivando":
+          if (data == "00") {
+            this.estatus_pago = "inactivo";
+            console.log(this.estatus_pago);
+          }
+      }
+      if (data == "10 04") {
+        await this.enviar("14 00");
+
+        this.estatus_pago = "desactivando";
+        console.log(this.estatus_pago);
+      }
+    },
     readSerial: function () {},
     clear: function () {
       this.boleto = "";
@@ -214,11 +306,27 @@ export default {
       this.activarPago();
       this.showopciones = true;
     },
-    desactivarPago: function () {
-      this.port.write(Buffer.from([0x14, 0x00]));
+    desactivarPago: async function () {
+      await this.enviar("14 00");
     },
-    activarPago: function () {
-      this.port.write(Buffer.from([0x14, 0x01]));
+    sleep: function (ms) {
+      return new Promise((resolve) => setTimeout(resolve, ms));
+    },
+    activarPago: async function () {
+      // 1) solicitar tarjeta
+      await this.enviar("11 00 01 00 00 00");
+      // this.port.write(Buffer.from([0x11, 0x00, 0x01, 0x00, 0x00, 0x00]));
+      await this.enviar("11 01 ff ff 00 00");
+      // this.port.write(Buffer.from([0x11, 0x01, 0xff, 0xff, 0x00, 0x00]));
+      await this.enviar("14 01");
+      // this.port.write(Buffer.from([0x14, 0x01]));
+      this.estatus_pago = "activando";
+      console.log(this.estatus_pago);
+      // 2) esperar confirmacion
+      // 3) mandar preset de cobro
+      // 4) esperar confirmacion de banco.
+      // 5) mando aviso producto despachado .
+
       // try {
       //   await new Promise((resolve, reject) => {
       //     let done = false;
@@ -256,21 +364,29 @@ export default {
 => 0x11 0x00 0x01 0x00 0x00 0x00   --  setup
 => 0x11 0x01 0xFF 0xFF 0x00 0x00   --  setup max min
 
-
 => 1401 enable  ACK  00
 Esperar evento <=  1003fde9
-=> 1301F40001  -- SETEO COBRO ACK 100503
+=> 0x13 0x00 0x00 0x14 0x00 0x01  -- SETEO COBRO ACK 10050014
 => 13020001 producto despachadoDESPACHADO  ack => 00 
-=> 1304  Mensaje de finalizacion de transaccion ACK  00 10 07 
+=> 1304  Mensaje de finalizacion de transaccion ACK   10 07 
 => 1400 DISABLE
+
+0x13 0x00 0x00 0x14 0x00 0x01
 
 ==== RESPUESTAS  === 
 10 04 == CANCELACION DE OPERACION DESPUES DE ELEGIR PRODUCTO
 10 03 FD E9 == ELIGA UN PRODUCTO  HAY QUE RESPONDER CON EL TOTAL 
 
 
+inicio ** solo escaner 
+en espera de solicitud de pago.
+en espera de tarjeta.
+en espera de pago.
+en espera de finalizacion.
 
 
+13 00 00 14 00 01
+13 00 00 14 00 01
 */
 </script>
 
