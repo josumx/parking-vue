@@ -6,16 +6,14 @@ const serialport = new SerialPort({
 });
 
 
-serialport.on("data", (data) => {
-    console.log(data.toString("ascii").trim());
-});
+// serialport.on("data", (data) => {
+//     console.log(data.toString("ascii").trim());
+// });
 
 export default {
-    connect() {
+    init() {
         serialport.open();
-        console.log("Scanner connected");
+        return serialport;
     },
-    printData(data) {
-        console.log(data);
-    }
+
 }

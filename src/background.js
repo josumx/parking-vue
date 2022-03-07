@@ -17,7 +17,7 @@ async function createWindow() {
     width: 900,
     height: 1000,
 
-    // kiosk: true,
+    kiosk: true,
     webPreferences: {
 
       // Use pluginOptions.nodeIntegration, leave this alone

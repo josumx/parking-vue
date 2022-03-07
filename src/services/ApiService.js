@@ -20,7 +20,7 @@ const apiServer = axios.create({
 
 })
 const apiServer2 = axios.create({
-    baseURL: 'http://192.168.192.125',
+    baseURL: 'http://192.168.0.50',
     withCredentials: false,
     timeout: 1000,
     headers: {
@@ -52,6 +52,9 @@ export default {
     },
     getTarifaQR(boleto) {
         return apiServer2.get('/?f=getTarifa&qr=' + boleto);
+    },
+    payBoleto(id, total) {
+        return apiServer2.get('/?f=payticket&boleto=' + id + '&total=' + total + '&pago=' + total + '&cambio=0');
     }
 
 }

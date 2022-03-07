@@ -65,7 +65,7 @@
                 depressed
                 large
                 color="success"
-                v-on:click="validatarifa()"
+                v-on:click="validatarifatxt()"
               >
                 <v-icon>mdi-checkbox-marked-circle</v-icon>
               </v-btn>
@@ -80,6 +80,12 @@
     >
     <v-alert v-show="estatusport" dense type="success">
       Nayax connected</v-alert
+    >
+    <v-alert v-show="!estatusportscaner" dense type="error">
+      Scanner disconnected</v-alert
+    >
+    <v-alert v-show="estatusportscaner" dense type="success">
+      Scanner connected</v-alert
     >
     <v-alert dense type="info"> {{ estatus }}</v-alert>
     <v-alert dense type="info"> {{ mensaje }}</v-alert>
@@ -106,7 +112,8 @@
 </style>
 <script>
 import EventService from "@/services/ApiService.js";
-import escanerservice from "@/services/escaner.js";
+// import escanerservice from "@/services/escaner.js";
+// import nayaxservice from "@/services/nayax.js";
 import tarifa from "./tarifa.vue";
 import opciones from "./proceso.vue";
 import { SerialPort } from "serialport";
@@ -118,12 +125,20 @@ export default {
   name: "pago",
   data: () => ({
     boleto: "",
+    idboleto: "",
     estatus: "",
+    total: "",
     estatus_pago: "inactivo",
     mensaje: "",
     showtarifa: false,
     showopciones: false,
     estatusport: false,
+    estatusportscaner: false,
+    qrscan: new SerialPort({
+      path: "COM2",
+      baudRate: 9600,
+      autoOpen: false,
+    }),
     port: new SerialPort({
       path: "COM1",
       baudRate: 9600,
@@ -152,11 +167,16 @@ export default {
     this.boleto = "A142F199E";
     this.showtarifa = false;
     this.showopciones = false;
-    escanerservice.connect();
 
-    // this.port.on("data", (data) => {
-    //   console.log(data.toString("ascii"));
+    // this.qrscan.on("data", (data) => {
+    //   console.log(data);
     // });
+
+    const parser2 = this.qrscan.pipe(new ReadlineParser({ delimiter: "\r" }));
+    parser2.on("data", (data) => {
+      this.validatarifaescaner(data.trim());
+    });
+
     const parser = this.port.pipe(new ReadlineParser({ delimiter: "\r\n" }));
     parser.on("data", (data) => {
       this.process(data.trim());
@@ -181,6 +201,25 @@ export default {
       connect();
     });
     connect();
+    const connect2 = () => {
+      console.log("connecting scanner");
+      this.qrscan.open(async (error) => {
+        if (error) {
+          console.log("connecting scanner error");
+          console.log(error);
+          setTimeout(() => connect(), "3000");
+        } else {
+          console.log("connecting scanner ok");
+
+          this.estatusportscaner = true;
+        }
+      });
+    };
+    this.qrscan.on("close", () => {
+      this.estatusportscaner = false;
+      connect2();
+    });
+    connect2();
   },
   methods: {
     enviar: async function (comando) {
@@ -207,8 +246,7 @@ export default {
           // en espera de que pasen tarjeta
           if (data == "10 03 FD E9") {
             // calcular tarifa
-            let importe = 1.21;
-            let centavos = importe * 100;
+            let centavos = this.total * 100;
             const b3 = (centavos & 0x0000ff).toString(16);
             const b2 = ((centavos >> 8) & 0x0000ff).toString(16);
             const b1 = ((centavos >> 16) & 0x0000ff).toString(16);
@@ -220,6 +258,8 @@ export default {
         case "esperando_cobro":
           // if (data == "10 05 00 14") {
           if (data.startsWith("10 05")) {
+            EventService.payBoleto(this.idboleto, this.total);
+            this.showtarifa = false;
             await this.sleep(3000);
             // maquina muestra retir tarjeta
             await this.enviar("13 02 00 01");
@@ -238,6 +278,7 @@ export default {
             return "";
           } else if (data == "FF") {
             await this.enviar("13 02 00 01");
+
             // await this.enviar("13 04");
             // await this.enviar("14 00");
             // this.estatus_pago = "desactivando";
@@ -260,7 +301,6 @@ export default {
       }
       if (data == "10 04") {
         await this.enviar("14 00");
-
         this.estatus_pago = "desactivando";
         console.log(this.estatus_pago);
       }
@@ -276,26 +316,30 @@ export default {
       this.boleto = this.boleto + value;
       console.log(value);
     },
-    validatarifa: async function () {
+    validatarifatxt: async function () {
       const response = await EventService.getTarifa(this.boleto);
-      this.estatus = response.data.estatus;
-      console.log(tarifa);
-      this.showtarifa = true;
+      this.validatarifa(response.data);
     },
     validatarifaescaner: async function (string) {
       const response = await EventService.getTarifaQR(string);
-      this.estatus = response.data.estatus;
+      this.validatarifa(response.data);
+    },
+    validatarifa: function (data) {
+      this.estatus = data.estatus;
       let msg;
       switch (this.estatus) {
         case "nopagado":
-          msg = "Boleto :" + response.cadena;
-          msg = msg + "Tarifa :" + response.tarifa;
+          this.total = data.tarifa;
+          this.boleto = data.cadena;
+          this.idboleto = data.boleto;
+          msg = ["Boleto :" + data.cadena, "\nTarifa :" + data.tarifa];
+
           break;
         case "pagado":
-          msg = "Boleto ya pagado";
+          msg = ["Boleto ya pagado"];
           break;
         case "invalido":
-          msg = "Boleto inexistente";
+          msg = ["Boleto inexistente"];
           break;
       }
       this.mensaje = msg;
