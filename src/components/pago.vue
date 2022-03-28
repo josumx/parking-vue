@@ -33,6 +33,8 @@
                 block
                 depressed
                 large
+                height="200"
+                font-size="120"
                 v-if="boton.color"
                 v-on:click="keypad(boton.value)"
                 :color="boton.color"
@@ -164,7 +166,7 @@ export default {
     ],
   }),
   created: function () {
-    this.boleto = "A142F199E";
+    this.boleto = "A154F770C";
     this.showtarifa = false;
     this.showopciones = false;
 
@@ -228,6 +230,7 @@ export default {
       this.port.write(
         Buffer.from(comando.split(" ").map((hex) => parseInt(hex, 16)))
       );
+      // this.port.write()
     },
     process: async function (data) {
       // validar estado.
